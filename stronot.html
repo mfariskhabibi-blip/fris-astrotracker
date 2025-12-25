@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AstroTracker Pro - ISS Finder</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/satellite.js/4.0.0/satellite.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    
+    <style>
+        :root {
+            --space-black: #05070a;
+            --neon-blue: #00f2ff;
+            --neon-purple: #bc13fe;
+            --star-white: #e0e0e0;
+            --neon-green: #39ff14;
+            --neon-yellow: #ffcc00;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--space-black);
+            color: var(--star-white);
+            overflow-x: hidden;
+        }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+        header {
+            padding: 3rem 1rem;
+            text-align: center;
+            background: radial-gradient(circle at top, #1a1f2c, var(--space-black));
+            border-bottom: 1px solid #222;
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            color: var(--neon-blue);
+            text-shadow: 0 0 10px rgba(0, 242, 255, 0.5);
+            margin: 0;
+        }
+
+        .creator-tag {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            color: var(--neon-purple);
+            letter-spacing: 3px;
+            margin-top: 15px;
+            opacity: 0.8;
+            text-transform: uppercase;
+        }
+
+        .control-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            display: flex;
+            gap: 10px;
+            border: 1px solid #333;
+        }
+
+        input {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            background: #111;
+            color: white;
+            outline: none;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: var(--neon-blue);
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+            font-family: 'Inter', sans-serif;
+        }
+
+        button:hover { 
+            opacity: 0.9; 
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .btn-purple { background: var(--neon-purple); color: white; }
+        .btn-green { background: var(--neon-green); color: black; }
+        .btn-yellow { background: var(--neon-yellow); color: black; }
+        .btn-small { padding: 6px 12px; font-size: 0.8rem; }
+        .btn-outline { background: transparent; border: 1px solid var(--neon-blue); color: var(--neon-blue); }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        .map-wrapper { position: relative; }
+
+        #map { 
+            height: 500px; 
+            border-radius: 15px; 
+            border: 1px solid #333; 
+            transition: all 0.3s ease;
+        }
+
+        .leaflet-marker-icon {
+            transition: all 3s linear;
+            filter: drop-shadow(0 0 5px var(--neon-blue));
+        }
+
+        .lock-btn {
+            position: absolute;
+            top: 80px;
+            right: 10px;
+            z-index: 1000;
+            background: #111;
+            color: var(--neon-blue);
+            border: 1px solid #333;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .lock-btn.active {
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 10px rgba(0, 242, 255, 0.3);
+            color: white;
+            background: var(--neon-blue);
+        }
+
+        .info-panel {
+            background: #111;
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            transition: all 0.5s ease;
+        }
+
+        @keyframes alertGlow {
+            0% { border-color: #333; box-shadow: none; }
+            50% { border-color: var(--neon-blue); box-shadow: 0 0 20px rgba(0, 242, 255, 0.4); }
+            100% { border-color: #333; box-shadow: none; }
+        }
+
+        .alert-active { animation: alertGlow 2s infinite; }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            background: rgba(188, 19, 254, 0.2);
+            color: var(--neon-purple);
+            border: 1px solid var(--neon-purple);
+            width: fit-content;
+        }
+
+        @keyframes pulse {
+            0% { r: 5; opacity: 1; stroke-width: 1; }
+            100% { r: 20; opacity: 0; stroke-width: 5; }
+        }
+        
+        .radar-pulse {
+            animation: pulse 1.5s infinite;
+            fill: none;
+            stroke: var(--neon-purple);
+        }
+
+        .live-stream-box {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #333;
+            margin: 5px 0;
+        }
+
+        .astronaut-section {
+            border-top: 1px solid #333;
+            padding-top: 15px;
+        }
+
+        .astronaut-list {
+            font-size: 0.8rem;
+            color: #aaa;
+            line-height: 1.4;
+        }
+
+        .facts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            font-size: 0.75rem;
+            background: rgba(255,255,255,0.03);
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .history-section {
+            margin-top: 10px;
+            border-top: 1px solid #333;
+            padding-top: 15px;
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .btn-clear {
+            background: transparent;
+            color: #555;
+            border: 1px solid #333;
+            font-size: 0.6rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        .history-list {
+            list-style: none;
+            padding: 0;
+            max-height: 100px;
+            overflow-y: auto;
+            font-size: 0.85rem;
+        }
+
+        .history-item {
+            padding: 8px;
+            border-bottom: 1px solid #222;
+            display: flex;
+            justify-content: space-between;
+            transition: background 0.3s;
+        }
+
+        .history-item:hover { background: rgba(255,255,255,0.05); }
+
+        .iss-location-display {
+            font-size: 0.85rem;
+            color: var(--neon-blue);
+            font-weight: bold;
+            background: rgba(0, 242, 255, 0.1);
+            padding: 8px;
+            border-radius: 5px;
+            margin-top: 5px;
+            border-left: 3px solid var(--neon-blue);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .day-night-badge {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .is-day { background: #ffcc00; color: #000; }
+        .is-night { background: #333; color: #fff; }
+
+        .eta-badge {
+            font-size: 0.75rem;
+            color: #ffcc00;
+            margin-top: -10px;
+            display: block;
+        }
+
+        .leaflet-control-layers { 
+            background: #111 !important; 
+            color: white !important; 
+            border: 1px solid #333 !important;
+        }
+
+        .apod-container {
+            margin-top: 10px;
+            border-top: 1px solid #333;
+            padding-top: 15px;
+        }
+        
+        #apodImage {
+            width: 100%;
+            border-radius: 8px;
+            margin-top: 10px;
+            cursor: pointer;
+            transition: 0.3s;
+            border: 1px solid #333;
+        }
+        
+        #apodImage:hover { 
+            opacity: 0.8; 
+            transform: scale(1.02);
+        }
+
+        .gallery-container {
+            margin-top: 10px;
+            border-top: 1px solid #333;
+            padding-top: 15px;
+        }
+        
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+        }
+        
+        .gallery-item {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            border-radius: 4px;
+            border: 1px solid #333;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .gallery-item:hover { 
+            transform: scale(1.05); 
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 10px rgba(0, 242, 255, 0.3);
+        }
+
+        /* Pass Prediction */
+        #passPrediction {
+            background: rgba(255, 204, 0, 0.1);
+            border: 1px solid var(--neon-yellow);
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        #passTimer {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            color: var(--neon-yellow);
+            text-align: center;
+            margin: 5px 0;
+        }
+        
+        #passDetails {
+            font-size: 0.75rem;
+            color: #aaa;
+            text-align: center;
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid var(--neon-blue);
+            border-left: 4px solid var(--neon-blue);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 10000;
+            display: none;
+            max-width: 300px;
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.3);
+        }
+
+        /* Loading */
+        .skeleton {
+            background: linear-gradient(90deg, #222 25%, #333 50%, #222 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 4px;
+        }
+
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Theme Toggle */
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .theme-btn {
+            background: #111;
+            color: var(--neon-yellow);
+            border: 1px solid #333;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Mode Satuan */
+        .unit-toggle {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+        }
+
+        .unit-btn {
+            background: #111;
+            color: var(--neon-green);
+            border: 1px solid #333;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        /* Export Section */
+        .export-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        /* Loading Overlay */
+        #loadingOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100000;
+            transition: opacity 0.5s;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #333;
+            border-top: 3px solid var(--neon-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Media Queries */
+        @media (max-width: 768px) {
+            .main-grid { grid-template-columns: 1fr; }
+            .control-buttons { flex-direction: column; }
+            .theme-toggle, .unit-toggle { position: relative; top: 0; left: 0; margin: 10px 0; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <p style="color: var(--neon-blue); font-family: 'Orbitron', sans-serif;">INITIALIZING TRACKING SYSTEM...</p>
+</div>
+
+<!-- Notification -->
+<div id="notification" class="notification">
+    <strong style="color: var(--neon-blue);">🚨 NOTIFICATION</strong>
+    <p id="notificationText" style="margin: 5px 0; font-size: 0.9rem;"></p>
+</div>
+
+<header>
+    <div class="theme-toggle">
+        <button class="theme-btn" onclick="toggleTheme()">
+            <span id="themeIcon">🌙</span> <span id="themeText">DARK</span>
+        </button>
+    </div>
+    
+    <div class="unit-toggle">
+        <button class="unit-btn" onclick="toggleUnit()">
+            <span id="unitText">KM</span>
+        </button>
+    </div>
+    
+    <h1>ASTROTRACKER PRO</h1>
+    <p>Pantau stasiun ruang angkasa dari kota Anda</p>
+    <div class="creator-tag">Created by Faris</div>
+</header>
+
+<div class="container">
+    <div class="control-buttons">
+        <button onclick="locateUser()" class="btn-purple">📍 LOKASI SAYA</button>
+        <button onclick="shareOnSocial()" class="btn-green">📱 SHARE</button>
+        <button onclick="toggleARMode()" class="btn-yellow">👁️ AR VIEW</button>
+        <button onclick="exportData()" class="btn-outline">📊 EXPORT DATA</button>
+        <button onclick="captureMap()" class="btn-outline">📸 SCREENSHOT</button>
+    </div>
+    
+    <div class="search-box">
+        <input type="text" id="cityInput" placeholder="Masukkan nama kota (contoh: Jakarta)...">
+        <button onclick="searchCity()">CARI KOTA</button>
+    </div>
+
+    <div class="main-grid">
+        <div class="map-wrapper">
+            <button id="lockBtn" class="lock-btn" onclick="toggleLock()">Lock ISS</button>
+            <button id="weatherBtn" class="lock-btn" style="top: 120px; background: rgba(255,255,255,0.1); color: #fff;" onclick="toggleWeather()">
+                <span id="weatherIcon">🌤️</span>
+            </button>
+            <div id="map"></div>
+            
+            <!-- Pass Prediction Card -->
+            <div id="passPrediction">
+                <h4 style="font-family: Orbitron; font-size: 0.8rem; margin: 0; color: var(--neon-yellow); text-align: center;">NEXT ISS PASS</h4>
+                <div id="passTimer" style="font-family: 'Orbitron'; font-size: 1.5rem; color: var(--neon-yellow); text-align: center; margin: 5px 0;">--:--:--</div>
+                <div id="passDetails" style="font-size: 0.75rem; color: #aaa; text-align: center;">Calculating next pass...</div>
+                <div style="text-align: center; margin-top: 5px;">
+                    <span id="passMaxElev" style="font-size: 0.7rem; color: #ffcc00;"></span>
+                    <span id="passDuration" style="font-size: 0.7rem; color: #aaa; margin-left: 10px;"></span>
+                </div>
+            </div>
+        </div>
+        
+        <div id="sidePanel" class="info-panel">
+            <div class="status-badge">LIVE TELEMETRY</div>
+            <h3 style="font-family: Orbitron; color: var(--neon-blue); margin: 0;">ISS Orbit Stats</h3>
+            
+            <div id="issLocationContainer" class="iss-location-display">
+                <span id="issLocation">Mendeteksi wilayah...</span>
+                <span id="dayNightStatus" class="day-night-badge">---</span>
+            </div>
+
+            <p>Lat: <b id="lat">0</b> | Lon: <b id="lon">0</b></p>
+            
+            <div class="facts-grid">
+                <div>🚀 Kecepatan:<br><b id="speed">27,600</b> <span id="speedUnit">km/jam</span></div>
+                <div>🛰️ Ketinggian:<br><b id="altitude">±420</b> <span id="altUnit">km</span></div>
+            </div>
+
+            <div class="live-stream-box">
+                <iframe 
+                    width="100%" 
+                    height="100%" 
+                    src="https://www.ustream.tv/embed/17074538?html5=true&autoplay=true&mute=true" 
+                    style="border: 0 none transparent;" 
+                    webkitallowfullscreen allowfullscreen frameborder="0">
+                </iframe>
+            </div>
+
+            <hr style="border: 0.5px solid #333; width: 100%;">
+            
+            <div class="astronaut-section">
+                <h4 style="font-family: Orbitron; font-size: 0.8rem; margin: 0 0 10px 0; color: var(--neon-blue);">HUMANS IN SPACE</h4>
+                <div id="astroList" class="astronaut-list">Memuat data kru...</div>
+            </div>
+
+            <div class="apod-container">
+                <h4 style="font-family: Orbitron; font-size: 0.8rem; margin: 0; color: var(--neon-blue);">NASA PHOTO OF THE DAY</h4>
+                <div id="apodStatus" style="font-size: 0.7rem; color: #555; margin-top: 5px;">Memuat data...</div>
+                <img id="apodImage" src="" alt="Loading APOD..." style="display:none;">
+                <p id="apodTitle" style="font-size: 0.75rem; margin: 8px 0 0 0; color: #aaa; font-weight: bold;"></p>
+            </div>
+
+            <div class="gallery-container">
+                <h4 style="font-family: Orbitron; font-size: 0.8rem; margin: 0; color: var(--neon-blue);">NASA MISSION GALLERY</h4>
+                <div id="galleryGrid" class="gallery-grid">
+                    <!-- Gallery items will be loaded here -->
+                </div>
+            </div>
+
+            <hr style="border: 0.5px solid #333; width: 100%;">
+            
+            <h3 style="font-family: Orbitron; color: var(--neon-purple); margin: 0;">Target: <span id="targetCity">-</span></h3>
+            <p>Jarak ke ISS: <br><span id="distance" style="font-size: 1.5rem; color: white;">0</span> <span id="distanceUnit">km</span></p>
+            <span id="etaText" class="eta-badge"></span>
+            <p id="alert-msg" style="color: #888; font-size: 0.8rem; margin: 0;">Cari kota untuk melihat jarak.</p>
+
+            <!-- Export Buttons -->
+            <div class="export-buttons">
+                <button onclick="exportData()" class="btn-small btn-outline" style="flex: 1;">📥 JSON</button>
+                <button onclick="captureMap()" class="btn-small btn-outline" style="flex: 1;">📸 MAP</button>
+                <button onclick="shareOnSocial()" class="btn-small btn-green" style="flex: 1;">📱 SHARE</button>
+            </div>
+
+            <div class="history-section">
+                <div class="history-header">
+                    <h4 style="font-family: Orbitron; font-size: 0.8rem; margin: 0;">RECENT SEARCHES</h4>
+                    <button class="btn-clear" onclick="clearHistory()">Clear</button>
+                </div>
+                <div id="historyList" class="history-list"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    // ============ KONFIGURASI AWAL ============
+    const darkMap = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { 
+        attribution: '&copy; CartoDB' 
+    });
+    
+    const satelliteMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { 
+        attribution: 'Tiles &copy; Esri' 
+    });
+
+    let weatherLayer = null;
+    let isWeatherOn = false;
+    
+    const map = L.map('map', { 
+        center: [0, 0], 
+        zoom: 2, 
+        layers: [darkMap],
+        zoomControl: false
+    });
+    
+    L.control.zoom({ position: 'topright' }).addTo(map);
+    L.control.layers({ 
+        "Dark Mode": darkMap, 
+        "Satellite View": satelliteMap 
+    }).addTo(map);
+
+    const issIcon = L.icon({
+        iconUrl: 'https://upload.wikimedia.org/wikipedia/commons/d/d0/International_Space_Station.svg',
+        iconSize: [40, 40],
+        iconAnchor: [20, 20]
+    });
+
+    const marker = L.marker([0, 0], {icon: issIcon}).addTo(map);
+    let orbitCoords = []; 
+    const orbitPath = L.polyline([], {
+        color: '#00f2ff', 
+        weight: 2, 
+        opacity: 0.6,
+        dashArray: '5, 10'
+    }).addTo(map);
+
+    // ============ VARIABEL GLOBAL ============
+    let cityMarker = null;
+    let pulseLayer = null; 
+    let targetCoords = null;
+    let currentISSCoords = [0, 0];
+    let currentAltitude = 420;
+    let currentVelocity = 27600;
+    let isLocked = false;
+    let lastAddressCheck = 0;
+    let issTLE = null;
+    let isMetric = true;
+    let isDarkTheme = true;
+    let apiCache = new Map();
+    let nextPassTimer = null;
+    let notificationSound = null;
+    let isARMode = false;
+
+    const defaultTLE = [
+        "1 25544U 98067A   25355.51401314  .00015523  00000-0  27572-3 0  9990",
+        "2 25544  51.6385 155.1384 0005232  38.2562  91.8906 15.49479363544714"
+    ];
+
+    // ============ FUNGSI UTILITAS ============
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371; // Radius Bumi dalam km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return isMetric ? distance : distance * 0.621371; // Konversi ke miles jika perlu
+    }
+
+    function formatDistance(km) {
+        if (isMetric) {
+            return `${km.toFixed(0)} km`;
+        } else {
+            return `${(km * 0.621371).toFixed(0)} mi`;
+        }
+    }
+
+    function formatSpeed(kmh) {
+        if (isMetric) {
+            return `${kmh.toLocaleString()} km/jam`;
+        } else {
+            return `${(kmh * 0.621371).toLocaleString()} mph`;
+        }
+    }
+
+    function formatAltitude(km) {
+        if (isMetric) {
+            return `${km.toFixed(0)} km`;
+        } else {
+            return `${(km * 3280.84).toLocaleString()} ft`;
+        }
+    }
+
+    // ============ FUNGSI TAMBAHAN ============
+    
+    // 1. GPS Detection & Auto-locate User
+    function locateUser() {
+        if (!navigator.geolocation) {
+            showNotification("GPS tidak didukung di browser Anda", "error");
+            return;
+        }
+        
+        showNotification("Mendeteksi lokasi Anda...", "info");
+        
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const { latitude, longitude } = position.coords;
+                targetCoords = [latitude, longitude];
+                
+                // Set marker
+                if (cityMarker) map.removeLayer(cityMarker);
+                if (pulseLayer) map.removeLayer(pulseLayer);
+                
+                cityMarker = L.circleMarker(targetCoords, { 
+                    color: '#39ff14', 
+                    radius: 8, 
+                    fillOpacity: 1 
+                }).addTo(map);
+                
+                pulseLayer = L.circleMarker(targetCoords, { 
+                    className: 'radar-pulse', 
+                    radius: 30 
+                }).addTo(map);
+                
+                // Reverse geocode untuk nama tempat
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+                    const data = await res.json();
+                    const cityName = data.address.city || data.address.town || 
+                                   data.address.village || "Lokasi Anda";
+                    document.getElementById('targetCity').innerText = cityName.toUpperCase();
+                } catch (e) {
+                    document.getElementById('targetCity').innerText = "LOKASI SAYA";
+                }
+                
+                // Update UI
+                isLocked = false;
+                document.getElementById('lockBtn').classList.remove('active');
+                map.flyTo(targetCoords, 8);
+                
+                // Simpan ke history
+                const initialDist = calculateDistance(currentISSCoords[0], currentISSCoords[1], latitude, longitude);
+                saveToHistory("LOKASI SAYA", initialDist);
+                
+                showNotification("Lokasi Anda berhasil dideteksi!", "success");
+                
+                // Hitung pass prediction
+                calculateNextPass();
+            },
+            (error) => {
+                let message = "Gagal mendapatkan lokasi";
+                switch(error.code) {
+                    case error.PERMISSION_DENIED:
+                        message = "Izin lokasi ditolak";
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        message = "Informasi lokasi tidak tersedia";
+                        break;
+                    case error.TIMEOUT:
+                        message = "Permintaan lokasi timeout";
+                        break;
+                }
+                showNotification(message, "error");
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    }
+
+    // 2. Pass Prediction dengan Countdown
+    function calculateNextPass() {
+        if (!targetCoords || !issTLE) return;
+        
+        const satrec = satellite.twoline2satrec(issTLE[0], issTLE[1]);
+        const now = new Date();
+        let nextPass = null;
+        let maxElevation = 0;
+        
+        // Cari pass dalam 24 jam ke depan
+        for (let i = 0; i < 1440; i += 5) { // Setiap 5 menit
+            const future = new Date(now.getTime() + i * 60000);
+            const position = satellite.propagate(satrec, future);
+            const geodetic = satellite.eciToGeodetic(position.position, satellite.gstime(future));
+            const lat = satellite.degreesLat(geodetic.latitude);
+            const lon = satellite.degreesLong(geodetic.longitude);
+            const dist = calculateDistance(lat, lon, targetCoords[0], targetCoords[1]);
+            
+            if (dist < 800) {
+                // Hitung elevation angle
+                const elevation = calculateElevation(lat, lon, targetCoords[0], targetCoords[1]);
+                if (elevation > maxElevation) {
+                    maxElevation = elevation;
+                    nextPass = {
+                        time: future,
+                        duration: "~6 menit",
+                        maxElevation: elevation
+                    };
+                }
+            }
+        }
+        
+        if (nextPass) {
+            // Tampilkan pass prediction
+            document.getElementById('passPrediction').style.display = 'block';
+            document.getElementById('passMaxElev').innerText = `Max: ${maxElevation.toFixed(1)}°`;
+            document.getElementById('passDuration').innerText = nextPass.duration;
+            
+            // Start countdown
+            updatePassCountdown(nextPass.time);
+            
+            // Set timer untuk update countdown setiap detik
+            if (nextPassTimer) clearInterval(nextPassTimer);
+            nextPassTimer = setInterval(() => updatePassCountdown(nextPass.time), 1000);
+        } else {
+            document.getElementById('passPrediction').style.display = 'none';
+        }
+    }
+
+    function updatePassCountdown(passTime) {
+        const now = new Date();
+        const diff = passTime - now;
+        
+        if (diff <= 0) {
+            document.getElementById('passTimer').innerText = "NOW!";
+            document.getElementById('passDetails').innerText = "ISS sedang melintas!";
+            return;
+        }
+        
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        
+        document.getElementById('passTimer').innerText = 
+            `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        
+        let details = "Next visible pass in ";
+        if (hours > 0) details += `${hours}h `;
+        if (minutes > 0 || hours > 0) details += `${minutes}m `;
+        details += `${seconds}s`;
+        document.getElementById('passDetails').innerText = details;
+    }
+
+    function calculateElevation(satLat, satLon, obsLat, obsLon) {
+        // Perhitungan sederhana elevation angle
+        const R = 6371;
+        const satAlt = 420;
+        
+        const dLat = (satLat - obsLat) * Math.PI / 180;
+        const dLon = (satLon - obsLon) * Math.PI / 180;
+        
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(obsLat * Math.PI / 180) * Math.cos(satLat * Math.PI / 180) * 
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const distance = R * c;
+        
+        return Math.atan2(satAlt, distance) * 180 / Math.PI;
+    }
+
+    // 3. Notification System
+    function showNotification(message, type = "info") {
+        const notification = document.getElementById('notification');
+        const text = document.getElementById('notificationText');
+        
+        text.innerText = message;
+        
+        // Set warna berdasarkan type
+        if (type === "error") {
+            notification.style.borderLeftColor = "#ff4444";
+        } else if (type === "success") {
+            notification.style.borderLeftColor = "#39ff14";
+        } else if (type === "warning") {
+            notification.style.borderLeftColor = "#ffcc00";
+        } else {
+            notification.style.borderLeftColor = "#00f2ff";
+        }
+        
+        notification.style.display = 'block';
+        
+        // Auto hide setelah 5 detik
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 5000);
+        
+        // Play sound jika perlu
+        if (type === "warning" || type === "success") {
+            playNotificationSound();
+        }
+    }
+
+    function playNotificationSound() {
+        if (!notificationSound) {
+            notificationSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-sci-fi-positive-notification-903.mp3');
+            notificationSound.volume = 0.3;
+        }
+        
+        // Coba play, ignore error jika autoplay diblok
+        notificationSound.play().catch(() => {
+            // Autoplay mungkin diblok, tidak perlu dilakukan apa-apa
+        });
+    }
+
+    // 4. Theme Toggle
+    function toggleTheme() {
+        isDarkTheme = !isDarkTheme;
+        const themeBtn = document.querySelector('.theme-btn');
+        const themeIcon = document.getElementById('themeIcon');
+        const themeText = document.getElementById('themeText');
+        
+        if (isDarkTheme) {
+            document.body.style.backgroundColor = '#05070a';
+            themeIcon.innerText = '🌙';
+            themeText.innerText = 'DARK';
+            showNotification("Dark mode diaktifkan", "info");
+        } else {
+            document.body.style.backgroundColor = '#f0f0f0';
+            document.body.style.color = '#333';
+            themeIcon.innerText = '☀️';
+            themeText.innerText = 'LIGHT';
+            showNotification("Light mode diaktifkan", "info");
+        }
+    }
+
+    // 5. Unit Toggle
+    function toggleUnit() {
+        isMetric = !isMetric;
+        const unitText = document.getElementById('unitText');
+        const speedUnit = document.getElementById('speedUnit');
+        const altUnit = document.getElementById('altUnit');
+        const distanceUnit = document.getElementById('distanceUnit');
+        
+        if (isMetric) {
+            unitText.innerText = 'KM';
+            speedUnit.innerText = 'km/jam';
+            altUnit.innerText = 'km';
+            distanceUnit.innerText = 'km';
+        } else {
+            unitText.innerText = 'MI';
+            speedUnit.innerText = 'mph';
+            altUnit.innerText = 'ft';
+            distanceUnit.innerText = 'mi';
+        }
+        
+        // Update display yang ada
+        updateDisplayUnits();
+        showNotification(`Sistem ${isMetric ? 'Metrik' : 'Imperial'} diaktifkan`, "info");
+    }
+
+    function updateDisplayUnits() {
+        // Update kecepatan
+        const speedElement = document.getElementById('speed');
+        speedElement.innerText = isMetric ? 
+            currentVelocity.toLocaleString() : 
+            (currentVelocity * 0.621371).toLocaleString();
+        
+        // Update altitude
+        const altElement = document.getElementById('altitude');
+        altElement.innerText = isMetric ? 
+            `±${currentAltitude}` : 
+            (currentAltitude * 3280.84).toLocaleString();
+        
+        // Update distance jika ada target
+        if (targetCoords) {
+            const dist = calculateDistance(
+                currentISSCoords[0], currentISSCoords[1], 
+                targetCoords[0], targetCoords[1]
+            );
+            document.getElementById('distance').innerText = dist.toFixed(0);
+        }
+    }
+
+    // 6. Weather Layer
+    function toggleWeather() {
+        isWeatherOn = !isWeatherOn;
+        const weatherBtn = document.getElementById('weatherBtn');
+        const weatherIcon = document.getElementById('weatherIcon');
+        
+        if (isWeatherOn) {
+            if (!weatherLayer) {
+                weatherLayer = L.tileLayer('https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid={apiKey}', {
+                    attribution: 'Weather data © OpenWeatherMap',
+                    opacity: 0.6,
+                    apiKey: 'YOUR_OPENWEATHER_API_KEY' // Ganti dengan API key Anda
+                });
+            }
+            weatherLayer.addTo(map);
+            weatherIcon.innerText = '🌧️';
+            showNotification("Weather overlay diaktifkan", "info");
+        } else {
+            if (weatherLayer) {
+                map.removeLayer(weatherLayer);
+            }
+            weatherIcon.innerText = '🌤️';
+        }
+    }
+
+    // 7. Export Data
+    function exportData() {
+        const data = {
+            timestamp: new Date().toISOString(),
+            issPosition: {
+                latitude: currentISSCoords[0],
+                longitude: currentISSCoords[1],
+                altitude: currentAltitude,
+                velocity: currentVelocity
+            },
+            target: targetCoords,
+            distance: document.getElementById('distance').innerText,
+            astronauts: document.getElementById('astroList').innerText,
+            dayNight: document.getElementById('dayNightStatus').innerText
+        };
+        
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `iss-tracker-${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        showNotification("Data berhasil diexport!", "success");
+    }
+
+    // 8. Screenshot Map
+    function captureMap() {
+        const mapElement = document.getElementById('map');
+        showNotification("Mengambil screenshot...", "info");
+        
+        html2canvas(mapElement).then(canvas => {
+            const link = document.createElement('a');
+            link.download = `iss-map-${Date.now()}.png`;
+            link.href = canvas.toDataURL('image/png');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showNotification("Screenshot berhasil disimpan!", "success");
+        }).catch(err => {
+            showNotification("Gagal mengambil screenshot", "error");
+            console.error(err);
+        });
+    }
+
+    // 9. Social Share
+    function shareOnSocial() {
+        const text = `Saya sedang melacak ISS di AstroTracker Pro! Jarak: ${document.getElementById('distance').innerText}${isMetric ? 'km' : 'mi'}`;
+        const url = window.location.href;
+        
+        if (navigator.share) {
+            navigator.share({
+                title: 'AstroTracker Pro',
+                text: text,
+                url: url
+            }).then(() => {
+                showNotification("Berhasil dibagikan!", "success");
+            }).catch(err => {
+                console.log('Error sharing:', err);
+            });
+        } else {
+            // Fallback untuk copy link
+            navigator.clipboard.writeText(`${text}\n${url}`).then(() => {
+                showNotification("Link disalin ke clipboard!", "success");
+            });
+        }
+    }
+
+    // 10. AR Mode (Simulasi)
+    function toggleARMode() {
+        isARMode = !isARMode;
+        
+        if (isARMode) {
+            showNotification("AR Mode: Arahkan kamera ke langit!", "info");
+            // Simulasi AR - zoom map dan tampilkan informasi tambahan
+            if (targetCoords) {
+                map.flyTo(targetCoords, 12);
+            }
+            
+            // Tambah overlay AR
+            const arOverlay = document.createElement('div');
+            arOverlay.id = 'arOverlay';
+            arOverlay.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.8);
+                z-index: 1000;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                color: white;
+                font-family: 'Orbitron';
+                text-align: center;
+            `;
+            arOverlay.innerHTML = `
+                <h2 style="color: var(--neon-blue);">AR ISS TRACKER</h2>
+                <p>Arahkan kamera ke langit untuk melihat ISS</p>
+                <div id="arInfo" style="margin-top: 20px; font-size: 1.2rem;"></div>
+                <button onclick="toggleARMode()" style="margin-top: 30px; padding: 10px 20px; background: var(--neon-purple); border: none; border-radius: 8px; color: white; cursor: pointer;">KELUAR AR</button>
+            `;
+            document.querySelector('.map-wrapper').appendChild(arOverlay);
+        } else {
+            // Hapus overlay AR
+            const arOverlay = document.getElementById('arOverlay');
+            if (arOverlay) {
+                arOverlay.remove();
+            }
+            showNotification("AR Mode dinonaktifkan", "info");
+        }
+    }
+
+    // 11. Cached Fetch untuk optimasi
+    async function cachedFetch(url, ttl = 60000) {
+        const cached = apiCache.get(url);
+        if (cached && Date.now() - cached.timestamp < ttl) {
+            return cached.data;
+        }
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            apiCache.set(url, { data, timestamp: Date.now() });
+            return data;
+        } catch (error) {
+            console.error('Fetch error:', error);
+            throw error;
+        }
+    }
+
+    // ============ FUNGSI YANG SUDAH ADA ============
+
+    function updateDayNightStatus(lat, lon) {
+        const badge = document.getElementById('dayNightStatus');
+        fetch(`https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lon}&formatted=0`)
+            .then(res => res.json())
+            .then(data => {
+                const now = new Date();
+                const sunrise = new Date(data.results.sunrise);
+                const sunset = new Date(data.results.sunset);
+                
+                if (now > sunrise && now < sunset) {
+                    badge.innerText = "Siang";
+                    badge.className = "day-night-badge is-day";
+                } else {
+                    badge.innerText = "Malam";
+                    badge.className = "day-night-badge is-night";
+                }
+            })
+            .catch(() => { badge.innerText = "---"; });
+    }
+
+    async function updateAPOD() {
+        const statusEl = document.getElementById('apodStatus');
+        try {
+            const data = await cachedFetch(`https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&thumbs=true`, 3600000);
+            
+            if(data.media_type === 'image' || (data.media_type === 'other' && data.thumbnail_url)) {
+                const img = document.getElementById('apodImage');
+                img.src = data.media_type === 'image' ? data.url : data.thumbnail_url;
+                img.onload = () => {
+                    img.style.display = 'block';
+                    statusEl.style.display = 'none';
+                };
+                img.onclick = () => window.open(data.hdurl || data.url, '_blank');
+                document.getElementById('apodTitle').innerText = data.title;
+            } else {
+                statusEl.innerText = "Konten hari ini berupa video.";
+            }
+        } catch (e) { 
+            statusEl.innerText = "Gagal memuat foto (Limit API DEMO).";
+        }
+    }
+
+    async function updateNASASelection() {
+        const gallery = document.getElementById('galleryGrid');
+        try {
+            const data = await cachedFetch(`https://images-api.nasa.gov/search?q=iss%20astronaut%20activity&media_type=image&page_size=4`, 3600000);
+            const items = data.collection.items;
+
+            gallery.innerHTML = '';
+            items.forEach(item => {
+                const imgUrl = item.links?.[0]?.href;
+                const title = item.data?.[0]?.title || "NASA Image";
+                if (imgUrl) {
+                    const img = document.createElement('img');
+                    img.className = 'gallery-item';
+                    img.src = imgUrl;
+                    img.title = title;
+                    img.onclick = () => window.open(imgUrl, '_blank');
+                    gallery.appendChild(img);
+                }
+            });
+        } catch (e) {
+            gallery.innerHTML = '<p style="font-size:0.7rem; color:#555;">Gagal memuat galeri.</p>';
+        }
+    }
+
+    function predictPassTime(targetLat, targetLon) {
+        if (!issTLE) issTLE = defaultTLE;
+        const satrec = satellite.twoline2satrec(issTLE[0], issTLE[1]);
+        let now = new Date();
+        for (let i = 0; i < 180; i++) {
+            let futureDate = new Date(now.getTime() + i * 60000);
+            const positionAndVelocity = satellite.propagate(satrec, futureDate);
+            const positionGd = satellite.eciToGeodetic(positionAndVelocity.position, satellite.gstime(futureDate));
+            const lat = satellite.degreesLat(positionGd.latitude);
+            const lon = satellite.degreesLong(positionGd.longitude);
+            const d = calculateDistance(lat, lon, targetLat, targetLon);
+            if (d < 800) return i === 0 ? "Sedang melintas!" : `Melintas dalam: ~${i} menit`;
+        }
+        return "Tidak melintas dalam waktu dekat";
+    }
+
+    async function getISSAddress(lat, lon) {
+        try {
+            const data = await cachedFetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=3&addressdetails=1`, 30000);
+            if (data.address) {
+                const country = data.address.country || "";
+                const state = data.address.state || data.address.region || "";
+                return country ? `${state}${state?', ':''}${country}` : "Di atas Samudera";
+            }
+            return "Di atas Samudera";
+        } catch (e) { return "Mendeteksi wilayah..."; }
+    }
+
+    function toggleLock() {
+        isLocked = !isLocked;
+        const lockBtn = document.getElementById('lockBtn');
+        lockBtn.classList.toggle('active');
+        lockBtn.innerText = isLocked ? "UNLOCK ISS" : "LOCK ISS";
+        
+        if (isLocked) { 
+            map.setView(currentISSCoords, map.getZoom()); 
+            updateAddressDisplay(); 
+            showNotification("ISS Lock aktif", "info");
+        } else {
+            showNotification("ISS Lock nonaktif", "info");
+        }
+    }
+
+    async function updateAddressDisplay() {
+        const addr = await getISSAddress(currentISSCoords[0], currentISSCoords[1]);
+        document.getElementById('issLocation').innerText = "📍 " + addr;
+        updateDayNightStatus(currentISSCoords[0], currentISSCoords[1]);
+    }
+
+    async function updateAstronauts() {
+        try {
+            const responseData = await cachedFetch('https://api.allorigins.win/get?url=' + encodeURIComponent('http://api.open-notify.org/astros.json'), 300000);
+            const data = JSON.parse(responseData.contents);
+            const issCrews = data.people.filter(p => p.craft === 'ISS').map(p => p.name);
+            document.getElementById('astroList').innerText = issCrews.join(', ') || "Data tidak tersedia";
+        } catch (e) {
+            document.getElementById('astroList').innerText = "Sunita Williams, Barry Wilmore, Nick Hague, Aleksandr Gorbunov, Donald Pettit, Aleksey Ovchinin, Ivan Vagner";
+        }
+    }
+
+    function loadHistory() {
+        const historyList = document.getElementById('historyList');
+        const savedHistory = JSON.parse(localStorage.getItem('astroHistory')) || [];
+        historyList.innerHTML = '';
+        if (savedHistory.length > 0) {
+            savedHistory.forEach(data => {
+                const item = document.createElement('div');
+                item.className = 'history-item';
+                item.innerHTML = `<div>${data.city} <small style="color:#555">(${data.time})</small></div><span>${data.dist} ${isMetric ? 'km' : 'mi'}</span>`;
+                historyList.appendChild(item);
+            });
+        } else {
+            historyList.innerHTML = '<div style="color: #555; font-style: italic;">Belum ada riwayat...</div>';
+        }
+    }
+
+    function clearHistory() {
+        if(confirm("Hapus semua riwayat?")) { 
+            localStorage.removeItem('astroHistory'); 
+            loadHistory();
+            showNotification("Riwayat dihapus", "info");
+        }
+    }
+
+    function saveToHistory(cityName, distance) {
+        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        let savedHistory = JSON.parse(localStorage.getItem('astroHistory')) || [];
+        savedHistory.unshift({ 
+            city: cityName, 
+            dist: isMetric ? Math.round(distance).toLocaleString() : Math.round(distance * 0.621371).toLocaleString(), 
+            time: time 
+        });
+        localStorage.setItem('astroHistory', JSON.stringify(savedHistory.slice(0, 8)));
+        loadHistory();
+    }
+
+    async function searchCity() {
+        const city = document.getElementById('cityInput').value.trim();
+        if (!city) {
+            showNotification("Masukkan nama kota terlebih dahulu", "error");
+            return;
+        }
+        
+        showNotification(`Mencari kota: ${city}...`, "info");
+        
+        try {
+            const data = await cachedFetch(`https://nominatim.openstreetmap.org/search?format=json&q=${city}`, 300000);
+            if (data.length > 0) {
+                const { lat, lon } = data[0];
+                targetCoords = [parseFloat(lat), parseFloat(lon)];
+                
+                // Hapus marker lama
+                if (cityMarker) map.removeLayer(cityMarker);
+                if (pulseLayer) map.removeLayer(pulseLayer);
+                
+                // Buat marker baru
+                cityMarker = L.circleMarker(targetCoords, { 
+                    color: '#bc13fe', 
+                    radius: 8, 
+                    fillOpacity: 1 
+                }).addTo(map);
+                
+                pulseLayer = L.circleMarker(targetCoords, { 
+                    className: 'radar-pulse', 
+                    radius: 30 
+                }).addTo(map);
+                
+                document.getElementById('targetCity').innerText = city.toUpperCase();
+                
+                // Update status
+                isLocked = false;
+                document.getElementById('lockBtn').classList.remove('active');
+                
+                // Fly to location
+                map.flyTo(targetCoords, 6);
+                
+                // Hitung jarak awal
+                const initialDist = calculateDistance(currentISSCoords[0], currentISSCoords[1], targetCoords[0], targetCoords[1]);
+                saveToHistory(city.toUpperCase(), initialDist);
+                
+                // Hitung pass prediction
+                calculateNextPass();
+                
+                showNotification(`Kota ${city} ditemukan!`, "success");
+            } else {
+                showNotification("Kota tidak ditemukan", "error");
+            }
+        } catch (e) { 
+            console.error(e);
+            showNotification("Gagal mencari kota", "error");
+        }
+    }
+
+    async function updateISS() {
+        try {
+            const data = await cachedFetch('https://api.wheretheiss.at/v1/satellites/25544', 3000);
+            
+            currentISSCoords = [parseFloat(data.latitude), parseFloat(data.longitude)];
+            currentAltitude = data.altitude;
+            currentVelocity = data.velocity;
+            
+            marker.setLatLng(currentISSCoords);
+            
+            if(data.tle) issTLE = [data.tle.line1, data.tle.line2];
+
+            const now = Date.now();
+            if (now - lastAddressCheck > 15000) { 
+                updateAddressDisplay(); 
+                lastAddressCheck = now; 
+            }
+
+            if (isLocked) {
+                map.panTo(currentISSCoords);
+            }
+
+            // Update orbit path dengan gradient berdasarkan altitude
+            orbitCoords.push(currentISSCoords);
+            if (orbitCoords.length > 100) orbitCoords.shift();
+            orbitPath.setLatLngs(orbitCoords);
+            
+            // Update warna orbit berdasarkan altitude
+            const hue = 200 + (currentAltitude / 1000);
+            orbitPath.setStyle({color: `hsl(${hue}, 100%, 50%)`});
+
+            // Update display
+            document.getElementById('lat').innerText = currentISSCoords[0].toFixed(4);
+            document.getElementById('lon').innerText = currentISSCoords[1].toFixed(4);
+            document.getElementById('speed').innerText = isMetric ? 
+                Math.round(currentVelocity).toLocaleString() : 
+                Math.round(currentVelocity * 0.621371).toLocaleString();
+            document.getElementById('altitude').innerText = isMetric ? 
+                `±${Math.round(currentAltitude)}` : 
+                Math.round(currentAltitude * 3280.84).toLocaleString();
+
+            // Update target jika ada
+            if (targetCoords) {
+                const dist = calculateDistance(currentISSCoords[0], currentISSCoords[1], targetCoords[0], targetCoords[1]);
+                document.getElementById('distance').innerText = Math.round(dist).toLocaleString();
+                document.getElementById('etaText').innerText = predictPassTime(targetCoords[0], targetCoords[1]);
+
+                // Check proximity alert
+                const panel = document.getElementById('sidePanel');
+                if (dist < 500) {
+                    if (!panel.classList.contains('alert-active')) {
+                        panel.classList.add('alert-active');
+                        document.getElementById('alert-msg').innerText = "⚠️ ISS SANGAT DEKAT! LIHAT KE LANGIT!";
+                        document.getElementById('alert-msg').style.color = "var(--neon-blue)";
+                        
+                        // Notifikasi dan sound
+                        showNotification("🚨 ISS SANGAT DEKAT! Lihat ke langit!", "warning");
+                        checkProximityAndNotify(dist);
+                    }
+                } else {
+                    panel.classList.remove('alert-active');
+                    document.getElementById('alert-msg').innerText = "ISS sedang berada jauh.";
+                    document.getElementById('alert-msg').style.color = "#888";
+                }
+            }
+            
+            // Update AR info jika dalam mode AR
+            if (isARMode && targetCoords) {
+                const arInfo = document.getElementById('arInfo');
+                if (arInfo) {
+                    const dist = calculateDistance(currentISSCoords[0], currentISSCoords[1], targetCoords[0], targetCoords[1]);
+                    arInfo.innerHTML = `
+                        <div>Jarak: <span style="color: var(--neon-blue);">${Math.round(dist)}${isMetric ? 'km' : 'mi'}</span></div>
+                        <div>Elevasi: <span style="color: var(--neon-green);">${calculateElevation(currentISSCoords[0], currentISSCoords[1], targetCoords[0], targetCoords[1]).toFixed(1)}°</span></div>
+                    `;
+                }
+            }
+        } catch (e) { 
+            console.error(e);
+        }
+    }
+
+    // Proximity notification dengan sound
+    function checkProximityAndNotify(dist) {
+        if (dist < 100 && Notification.permission === "granted") {
+            new Notification("🚨 ISS Mendekat!", {
+                body: `Hanya ${Math.round(dist)}${isMetric ? 'km' : 'mi'} dari target Anda!`,
+                icon: "https://upload.wikimedia.org/wikipedia/commons/d/d0/International_Space_Station.svg"
+            });
+        }
+    }
+
+    // ============ INISIALISASI ============
+    
+    // Request notification permission
+    if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+    }
+
+    // Hide loading overlay setelah semua siap
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            document.getElementById('loadingOverlay').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('loadingOverlay').style.display = 'none';
+                showNotification("AstroTracker Pro siap digunakan!", "success");
+            }, 500);
+        }, 1500);
+    });
+
+    // Event listener untuk Enter key di input
+    document.getElementById('cityInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            searchCity();
+        }
+    });
+
+    // Inisialisasi data
+    loadHistory();
+    updateAstronauts();
+    updateAPOD();
+    updateNASASelection();
+    
+    // Mulai update ISS setiap 3 detik
+    setInterval(updateISS, 3000);
+    updateISS(); // Panggil pertama kali
+</script>
+</body>
+</html>
